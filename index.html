@@ -65,6 +65,16 @@ details summary{cursor:pointer;font-weight:600}
 .stage.busy::after{content:"Painting…";position:absolute;left:50%;top:45%;transform:translateX(-50%);background:rgba(0,0,0,.6);color:#fff;padding:8px 14px;border-radius:999px;font-weight:600}
 .fit{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:center;margin-top:10px;color:var(--kraft-ink);font-size:12px}
 .fit input[type=range]{width:140px}
+.manual{grid-column:1/-1;background:var(--panel);border:2px solid var(--accent);border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:10px}
+.jobs{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,340px),1fr));gap:10px}
+.job{border:1px solid var(--line);border-radius:10px;background:var(--bg);padding:10px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.job h3{margin:0;font:600 14px var(--f-body)}
+.job ol{margin:0;padding-left:18px;font-size:13px;display:flex;flex-direction:column;gap:3px}
+.job textarea{min-height:130px;font-size:12px;line-height:1.4}
+.job .acts{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.job .refs img{height:56px}
+.upload{position:relative;overflow:hidden;display:inline-block}
+.upload input{position:absolute;inset:0;opacity:0;cursor:pointer}
 .tray{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:10px}
 .cards{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .card{border:1px solid var(--line);border-radius:10px;background:var(--bg);display:flex;flex-direction:column;overflow:hidden;min-width:0}
@@ -104,17 +114,20 @@ details summary{cursor:pointer;font-weight:600}
     <section>
       <h2><span class="step">1</span> Image generator</h2>
       <label class="f">Service
-        <select id="provider">
-          <option value="openai">OpenAI</option>
-          <option value="gemini">Google Gemini</option>
-        </select>
+        <select id="provider"></select>
       </label>
-      <label class="f"><span id="key-label">API key</span>
-        <input type="password" id="api-key" autocomplete="off">
-      </label>
-      <label class="f">Model
-        <select id="model"></select>
-      </label>
+      <div id="api-fields" style="display:flex;flex-direction:column;gap:10px">
+        <label class="f" id="base-row">API address
+          <input type="text" id="base-url" placeholder="https://api.example.com/v1" autocomplete="off">
+        </label>
+        <label class="f"><span id="key-label">API key</span>
+          <input type="password" id="api-key" autocomplete="off">
+        </label>
+        <label class="f">Model
+          <select id="model"></select>
+          <input type="text" id="model-text" placeholder="Model name" autocomplete="off">
+        </label>
+      </div>
       <p class="note" id="key-note"></p>
     </section>
 
@@ -158,6 +171,11 @@ details summary{cursor:pointer;font-weight:600}
   </aside>
 
   <section class="dress" id="view-dress">
+    <div class="manual" id="manual" hidden>
+      <h2>ChatGPT steps</h2>
+      <p class="note">For each card: copy the prompt, open ChatGPT, attach the pictures it lists, paste the prompt and send. Save the picture ChatGPT makes to your Photos, then upload it on the same card. You can leave this page and come back; your cards are kept.</p>
+      <div class="jobs" id="jobs"></div>
+    </div>
     <div class="board">
       <div class="board-tools">
         <span class="lbl" id="stage-label">Your doll</span>
@@ -238,7 +256,7 @@ const AES = {
 const DEFAULT_PICKS = {cottage:['top','vest','skirt','shoes'],academia:['top','sweater','skirt','tights','shoes','bag'],goth:['dress','jacket','boots','jewelry'],casual:['top','skirt','boots','jacket']};
 
 /* ---------- state ---------- */
-const S = { provider:'openai', key:'', model:'gpt-image-1', photo:null, doll:null, aes:'cottage', custom:'', picks:new Set(DEFAULT_PICKS.cottage), plan:{}, pieces:[], view:'dress', sel:null };
+const S = { provider:'manual', key:'', model:'', base:'', jobs:[], photo:null, doll:null, aes:'cottage', custom:'', picks:new Set(DEFAULT_PICKS.cottage), plan:{}, pieces:[], view:'dress', sel:null };
 let PID = 0;
 
 /* ---------- image helpers ---------- */
@@ -287,36 +305,47 @@ function alphaBox(d,w,h){ let x0=w,y0=h,x1=-1,y1=-1;
   for(let y=0;y<h;y+=2) for(let x=0;x<w;x+=2) if(d[(y*w+x)*4+3]>128){ if(x<x0)x0=x; if(x>x1)x1=x; if(y<y0)y0=y; if(y>y1)y1=y; }
   return x1<0?{x:0,y:0,w,h}:{x:x0,y:y0,w:x1-x0+2,h:y1-y0+2}; }
 
-/* ---------- image services ---------- */
+/* ---------- image services ----------
+   Every service takes the same job: {prompt, images:[dataUrl...]} and returns a picture as a data URL.
+   To add a new service, add an entry here with a run(job) function. */
 const PROVIDERS = {
-  openai:{label:'OpenAI', ph:'Paste your key (starts with sk-…)', note:'The key stays in this browser and is sent only to OpenAI. Get one at platform.openai.com/api-keys. OpenAI may ask you to verify your organization before its image model works.',
+  manual:{label:'ChatGPT by hand (no API key)', manual:true,
+    note:'The app writes each prompt for you. You paste it into ChatGPT, then upload the picture it makes. No API key or cost beyond your ChatGPT plan.'},
+  openai:{label:'OpenAI API', ph:'Paste your key (starts with sk-…)', run:job=>openaiImage(job,'https://api.openai.com/v1'),
+    note:'The key stays in this browser and is sent only to OpenAI. Get one at platform.openai.com/api-keys.',
     models:[['gpt-image-1','GPT Image 1 (best quality, about 6–25¢ per image)'],['gpt-image-1-mini','GPT Image 1 Mini (cheaper, a little less detail)']]},
-  gemini:{label:'Gemini', ph:'Paste your key (starts with AIza…)', note:'The key stays in this browser and is sent only to Google. Get one at aistudio.google.com/apikey.',
-    models:[['gemini-2.5-flash-image','Gemini 2.5 Flash Image (fast, about 4¢ per image)'],['gemini-3-pro-image-preview','Gemini 3 Pro Image (best detail, costs more)']]}
+  gemini:{label:'Google Gemini API', ph:'Paste your key (starts with AIza…)', run:job=>gemini(job),
+    note:'The key stays in this browser and is sent only to Google. Get one at aistudio.google.com/apikey.',
+    models:[['gemini-2.5-flash-image','Gemini 2.5 Flash Image (fast, about 4¢ per image)'],['gemini-3-pro-image-preview','Gemini 3 Pro Image (best detail, costs more)']]},
+  compat:{label:'Other service (OpenAI-compatible)', ph:'Paste the service key', run:job=>openaiImage(job,S.base), custom:true,
+    note:'For any image service that copies OpenAI\'s image-edit API. Enter its API address and model name from its docs. The key is sent only to that address.'}
 };
-async function generate(parts){
-  if(!S.key) throw new Error(`Add your ${PROVIDERS[S.provider].label} API key in step 1 first.`);
-  return S.provider==='openai' ? openaiImage(parts) : gemini(parts);
+async function generate(job){
+  const P=PROVIDERS[S.provider];
+  if(P.custom&&!S.base) throw new Error('Add the service\'s API address in step 1 first.');
+  if(!S.key) throw new Error(`Add your ${P.label} key in step 1 first.`);
+  if(!S.model) throw new Error('Add a model name in step 1 first.');
+  return P.run(job);
 }
-async function openaiImage(parts){
+function dataBlob(url){ const bin=atob(b64(url)), u=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) u[i]=bin.charCodeAt(i); return new Blob([u],{type:mime(url)}); }
+async function openaiImage(job,base){
   const fd=new FormData();
-  fd.append('model',S.model);
-  fd.append('prompt',parts.filter(p=>p.text).map(p=>p.text).join('\n\n'));
-  let n=0;
-  for(const p of parts){ if(!p.inlineData) continue; const bin=atob(p.inlineData.data), u=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) u[i]=bin.charCodeAt(i);
-    const ext=p.inlineData.mimeType==='image/png'?'png':'jpg'; fd.append('image[]',new Blob([u],{type:p.inlineData.mimeType}),`image${++n}.${ext}`); }
+  fd.append('model',S.model); fd.append('prompt',job.prompt);
+  job.images.forEach((u,i)=>fd.append('image[]',dataBlob(u),`image${i+1}.${mime(u)==='image/png'?'png':'jpg'}`));
   fd.append('size','1024x1536'); fd.append('quality','high'); fd.append('background','opaque');
   if(S.model==='gpt-image-1') fd.append('input_fidelity','high');
-  const r=await fetch('https://api.openai.com/v1/images/edits',{method:'POST',headers:{Authorization:'Bearer '+S.key},body:fd});
+  const r=await fetch(base.replace(/\/+$/,'')+'/images/edits',{method:'POST',headers:{Authorization:'Bearer '+S.key},body:fd});
   let j={}; try{ j=await r.json(); }catch(e){}
   if(!r.ok) throw new Error((j.error&&j.error.message)||('Request failed ('+r.status+')'));
-  const d=(j.data||[])[0]; if(!d||!d.b64_json) throw new Error('No picture came back. Try again.');
-  return 'data:image/png;base64,'+d.b64_json;
+  const d=(j.data||[])[0];
+  if(d&&d.b64_json) return 'data:image/png;base64,'+d.b64_json;
+  if(d&&d.url){ const ir=await fetch(d.url); const bl=await ir.blob(); return await new Promise(res=>{ const fr=new FileReader(); fr.onload=()=>res(fr.result); fr.readAsDataURL(bl); }); }
+  throw new Error('No picture came back. Try again.');
 }
 /* ---------- Gemini ---------- */
 const API='https://generativelanguage.googleapis.com/v1beta/models/';
-async function gemini(parts){
-  if(!S.key) throw new Error('Add your Gemini API key in step 1 first.');
+async function gemini(job){
+  const parts=[{text:job.prompt},...job.images.map(u=>({inlineData:{mimeType:mime(u),data:b64(u)}}))];
   const body=cfg=>JSON.stringify({contents:[{role:'user',parts}],generationConfig:cfg});
   const call=async cfg=>{
     const r=await fetch(API+encodeURIComponent(S.model)+':generateContent',{method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':S.key},body:body(cfg)});
@@ -332,7 +361,7 @@ async function gemini(parts){
   if(!im){ const txt=ps.map(p=>p.text).filter(Boolean).join(' '); throw new Error(txt?('The model replied without a picture: '+txt.slice(0,200)):('No picture came back ('+((cand&&cand.finishReason)||(j.promptFeedback&&j.promptFeedback.blockReason)||'unknown reason')+'). Try again.')); }
   const dd=im.inlineData||im.inline_data; return 'data:'+(dd.mimeType||dd.mime_type||'image/png')+';base64,'+dd.data;
 }
-const img = url => ({inlineData:{mimeType:mime(url),data:b64(url)}});
+const REF_URLS = REFS.map(r=>'data:image/jpeg;base64,'+r);
 const STYLE = `ART STYLE: a realistic, softly painted digital illustration like a high-quality printed fashion sticker: lifelike face, real human proportions, natural skin shading, detailed fabric texture and soft studio lighting. It must NOT look cartoonish, anime, chibi, flat or vector.`;
 const BG = `Place it on a solid, perfectly flat medium gray background (#BEBEBE) with no gradient, no floor, no shadow, no text and no other objects. Give the artwork a clean white die-cut sticker border about 8 pixels wide all the way around, like the style references.`;
 function dollPrompt(){
@@ -361,22 +390,32 @@ const DB={ db:null,
   put(k,v){ try{ if(this.db) this.db.transaction('kv','readwrite').objectStore('kv').put(v,k); }catch(e){} },
   get(k){ return new Promise(res=>{ try{ if(!this.db) return res(null); const r=this.db.transaction('kv').objectStore('kv').get(k); r.onsuccess=()=>res(r.result||null); r.onerror=()=>res(null); }catch(e){ res(null); } }); }
 };
-const save = () => DB.put('state',{photo:S.photo,doll:S.doll,aes:S.aes,custom:S.custom,picks:[...S.picks],plan:S.plan,pieces:S.pieces.map(p=>({...p,busy:false}))});
+const save = () => DB.put('state',{batch:S.batch,jobs:S.jobs,photo:S.photo,doll:S.doll,aes:S.aes,custom:S.custom,picks:[...S.picks],plan:S.plan,pieces:S.pieces.map(p=>({...p,busy:false}))});
 
 /* ---------- UI: setup ---------- */
 $('refs').innerHTML=REFS.map(r=>`<img alt="" src="data:image/jpeg;base64,${r}">`).join('');
+$('provider').innerHTML=Object.entries(PROVIDERS).map(([k,P])=>`<option value="${k}">${P.label}</option>`).join('');
 function setProvider(pv){
-  S.provider=PROVIDERS[pv]?pv:'openai'; const P=PROVIDERS[S.provider];
-  $('provider').value=S.provider; $('key-label').textContent=P.label+' API key'; $('api-key').placeholder=P.ph; $('key-note').textContent=P.note;
-  $('model').innerHTML=P.models.map(([v,l])=>`<option value="${v}">${l}</option>`).join('');
-  const m=store.get('sd-model-'+S.provider); S.model=P.models.some(x=>x[0]===m)?m:P.models[0][0]; $('model').value=S.model;
-  $('api-key').value=S.key=store.get('sd-key-'+S.provider)||(S.provider==='gemini'?store.get('sd-key')||'':'');
+  S.provider=PROVIDERS[pv]?pv:'manual'; const P=PROVIDERS[S.provider];
+  $('provider').value=S.provider; $('key-note').textContent=P.note;
+  $('api-fields').hidden=!!P.manual; $('base-row').hidden=!P.custom;
+  if(!P.manual){
+    $('key-label').textContent=P.label.replace(/ \(.*\)$/,'')+' key'; $('api-key').placeholder=P.ph;
+    $('api-key').value=S.key=store.get('sd-key-'+S.provider)||'';
+    const m=store.get('sd-model-'+S.provider);
+    $('model').hidden=!P.models; $('model-text').hidden=!!P.models;
+    if(P.models){ $('model').innerHTML=P.models.map(([v,l])=>`<option value="${v}">${l}</option>`).join(''); S.model=P.models.some(x=>x[0]===m)?m:P.models[0][0]; $('model').value=S.model; }
+    else { S.model=m||''; $('model-text').value=S.model; }
+    $('base-url').value=S.base=store.get('sd-base-'+S.provider)||'';
+  }
+  $('make-doll').textContent=(S.doll?'Paint the doll again':'Paint the doll');
   store.set('sd-provider',S.provider);
 }
-setProvider(store.get('sd-provider')||'openai');
 $('provider').onchange=e=>setProvider(e.target.value);
 $('api-key').oninput=e=>{ S.key=e.target.value.trim(); store.set('sd-key-'+S.provider,S.key); };
 $('model').onchange=e=>{ S.model=e.target.value; store.set('sd-model-'+S.provider,S.model); };
+$('model-text').oninput=e=>{ S.model=e.target.value.trim(); store.set('sd-model-'+S.provider,S.model); };
+$('base-url').oninput=e=>{ S.base=e.target.value.trim(); store.set('sd-base-'+S.provider,S.base); };
 
 function renderChips(){
   $('aesthetics').innerHTML=Object.entries(AES).map(([k,a])=>`<button class="chip" data-k="${k}" aria-pressed="${S.aes===k&&!S.custom}">${a.label}</button>`).join('');
@@ -404,43 +443,116 @@ const drop=$('drop');
 drop.addEventListener('drop',e=>setPhoto(e.dataTransfer.files[0]));
 function status(id,msg,err){ const el=$(id); el.textContent=msg; el.className='status'+(err?' err':''); }
 
-/* ---------- generation ---------- */
-$('make-doll').onclick=async()=>{
+/* ---------- generation ----------
+   Each picture is a job. With an API service the job runs right away; by hand it becomes a card in "ChatGPT steps"
+   and finishes when the user uploads ChatGPT's picture. Both paths end in applyResult(). */
+const isManual = () => !!PROVIDERS[S.provider].manual;
+let JID=0;
+function dollJob(){ return {kind:'doll', title:'The doll', prompt:dollPrompt(), images:[S.photo,...REF_URLS],
+  attach:['Your photo (attach it first)','One or two of your sticker photos, as style examples. You can also press and hold a sticker below and save it to Photos.'], refs:true}; }
+function pieceJob(p){ return {kind:'piece', pieceId:p.id, title:p.desc, prompt:piecePrompt(p.type,p.desc,S.custom||AES[S.aes].label), images:[S.doll.raw],
+  attach:['The doll picture ChatGPT made for you (or send this in the same ChatGPT chat as the doll)']}; }
+async function runJob(job){
+  if(isManual()){ addManualJob(job); return; }
+  try{ const raw=await generate(job); await applyResult(job,raw); }
+  catch(e){ failJob(job,e.message); }
+}
+async function fitTo(raw,w,h){ // match the doll's canvas so pieces line up
+  const im=await loadImg(raw); if(Math.abs(im.naturalWidth/im.naturalHeight-w/h)<0.01) return raw;
+  const c=canvas(w,h), x=c.getContext('2d'); const t=canvas(1,1).getContext('2d'); t.drawImage(im,0,0,1,1); const px=t.getImageData(0,0,1,1).data;
+  x.fillStyle=`rgb(${px[0]},${px[1]},${px[2]})`; x.fillRect(0,0,w,h);
+  const sc=Math.min(w/im.naturalWidth,h/im.naturalHeight), dw=im.naturalWidth*sc, dh=im.naturalHeight*sc; x.drawImage(im,(w-dw)/2,(h-dh)/2,dw,dh);
+  return c.toDataURL('image/png');
+}
+async function applyResult(job,raw){
+  if(job.kind==='doll'){
+    const cut=await cutout(raw); const old=S.doll; const dims=await loadImg(raw); S.doll={raw,...cut,rw:dims.naturalWidth,rh:dims.naturalHeight};
+    status('doll-status', old&&S.pieces.length?'New doll ready. Clothes made for the old doll may need redoing if they no longer line up.':'Doll ready. Not quite right? Make another take.');
+    $('stage').classList.remove('busy'); $('make-doll').disabled=false; $('make-doll').textContent='Paint the doll again';
+  } else {
+    const p=S.pieces.find(q=>q.id===job.pieceId); if(!p) return;
+    const fitted=S.doll?await fitTo(raw,S.doll.rw||S.doll.w,S.doll.rh||S.doll.h):raw;
+    const cut=await cutout(fitted); Object.assign(p,{raw:fitted,...cut,dx:0,dy:0,s:1,busy:false,waiting:false,error:''});
+    if(!S.pieces.some(q=>q!==p&&q.wearing&&q.type===p.type)) wear(p,true);
+    clothesProgress();
+  }
+  save(); renderStage(); renderTray(); renderSheetsIfOpen();
+}
+function failJob(job,msg){
+  if(job.kind==='doll'){ status('doll-status',msg,true); $('stage').classList.remove('busy'); $('make-doll').disabled=false; }
+  else { const p=S.pieces.find(q=>q.id===job.pieceId); if(p){ p.busy=false; p.waiting=false; p.error=msg; } clothesProgress(); renderTray(); }
+}
+function clothesProgress(){
+  const live=S.pieces.filter(p=>p.batch===S.batch); if(!live.length) return;
+  const done=live.filter(p=>p.url&&!p.busy&&!p.waiting).length, bad=live.filter(p=>p.error).length, wait=live.filter(p=>p.waiting).length, busy=live.filter(p=>p.busy).length;
+  if(busy) status('clothes-status',`Painted ${done} of ${live.length}…`);
+  else if(wait) status('clothes-status',`${wait} piece${wait>1?'s are':' is'} waiting for a ChatGPT picture. See ChatGPT steps.`);
+  else status('clothes-status', bad?`${done} ready, ${bad} failed. Tap Retry on a failed piece.`:'All pieces ready. Tap them to try them on.', !!bad);
+  $('make-clothes').disabled=busy>0;
+}
+$('make-doll').onclick=()=>{
   if(!S.photo){ status('doll-status','Add a photo first.',true); return; }
-  const btn=$('make-doll'); btn.disabled=true; $('stage').classList.add('busy'); status('doll-status','Painting the doll. This usually takes 10 to 30 seconds…');
-  try{
-    const raw=await generate([{text:dollPrompt()},img(S.photo),...REFS.map(r=>({inlineData:{mimeType:'image/jpeg',data:r}}))]);
-    const cut=await cutout(raw);
-    const old=S.doll; S.doll={raw,...cut};
-    if(old&&S.pieces.length) status('doll-status','New doll painted. Your clothes were painted for the old doll, so repaint them if they no longer line up.');
-    else status('doll-status','Doll painted. Not quite right? Paint again for another take.');
-    save(); renderStage(); renderSheetsIfOpen();
-  }catch(e){ status('doll-status',e.message,true); }
-  btn.disabled=false; $('stage').classList.remove('busy'); btn.textContent=S.doll?'Paint the doll again':'Paint the doll';
+  if(isManual()){ S.jobs=S.jobs.filter(j=>j.kind!=='doll'); runJob(dollJob()); status('doll-status','Your doll prompt is ready under ChatGPT steps.'); return; }
+  $('make-doll').disabled=true; $('stage').classList.add('busy'); status('doll-status','Painting the doll. This usually takes 10 to 60 seconds…');
+  runJob(dollJob());
 };
-async function paintPiece(p){
-  p.busy=true; p.error=''; renderTray();
-  try{
-    const raw=await generate([{text:piecePrompt(p.type,p.desc,S.custom||AES[S.aes].label)},img(S.doll.raw)]);
-    const cut=await cutout(raw); Object.assign(p,{raw,...cut,dx:0,dy:0,s:1});
-  }catch(e){ p.error=e.message; }
-  p.busy=false;
+function startPiece(p){
+  p.error=''; p.busy=!isManual(); p.waiting=isManual();
+  S.jobs=S.jobs.filter(j=>j.pieceId!==p.id); runJob(pieceJob(p));
 }
 $('make-clothes').onclick=async()=>{
-  if(!S.doll){ status('clothes-status','Paint the doll first, so the clothes can match her pose.',true); return; }
+  if(!S.doll){ status('clothes-status','Make the doll first, so the clothes can match her pose.',true); return; }
   const types=Object.keys(CATS).filter(k=>S.picks.has(k));
   if(!types.length){ status('clothes-status','Pick at least one piece.',true); return; }
-  const btn=$('make-clothes'); btn.disabled=true;
-  const fresh=types.map(t=>({id:++PID,type:t,desc:(S.plan[t]||defaultDesc(t)).trim(),name:CATS[t],wearing:false,busy:true}));
-  S.pieces=S.pieces.concat(fresh); renderTray();
-  let done=0; status('clothes-status',`Painting ${fresh.length} piece${fresh.length>1?'s':''}…`);
-  const queue=fresh.slice(); const worker=async()=>{ while(queue.length){ const p=queue.shift(); await paintPiece(p); done++; status('clothes-status',`Painted ${done} of ${fresh.length}…`);
-    if(!p.error&&!S.pieces.some(q=>q.wearing&&q.type===p.type)) wear(p,true); renderStage(); renderTray(); } };
-  await Promise.all([worker(),worker()]);
-  const bad=fresh.filter(p=>p.error).length;
-  status('clothes-status', bad?`${fresh.length-bad} painted, ${bad} failed. Tap Retry on a failed piece.`:'All pieces painted. Tap them to try them on.', !!bad);
-  btn.disabled=false; save(); renderSheetsIfOpen();
+  S.batch=Date.now();
+  const fresh=types.map(t=>({id:++PID,type:t,desc:(S.plan[t]||defaultDesc(t)).trim(),name:CATS[t],wearing:false,batch:S.batch}));
+  S.pieces=S.pieces.concat(fresh);
+  if(isManual()){ fresh.forEach(startPiece); renderTray(); clothesProgress(); save(); return; }
+  fresh.forEach(p=>p.busy=true); renderTray(); clothesProgress();
+  const queue=fresh.slice(); const worker=async()=>{ while(queue.length) await startPieceAwait(queue.shift()); };
+  await Promise.all([worker(),worker()]); clothesProgress(); save();
 };
+async function startPieceAwait(p){ p.error=''; p.busy=true; await runJob(pieceJob(p)); }
+
+/* ---------- ChatGPT steps (by hand) ---------- */
+function addManualJob(job){
+  job.id=++JID; S.jobs.push(job); save(); renderJobs();
+  $('manual').scrollIntoView({behavior:'smooth',block:'start'});
+}
+function renderJobs(){
+  $('manual').hidden=!S.jobs.length;
+  $('jobs').innerHTML=S.jobs.map(j=>`<div class="job" data-j="${j.id}">
+    <h3></h3>
+    <ol><li>Tap <b>Copy prompt</b>, then open ChatGPT.</li><li>Attach: <span class="att"></span></li><li>Paste the prompt and send. Ask for a tall portrait image if it comes back square.</li><li>Save ChatGPT's picture to Photos, then tap <b>Upload picture</b>.</li></ol>
+    ${j.refs?`<div class="refs">${REF_URLS.map(u=>`<img alt="Style sticker" src="${u}">`).join('')}</div>`:''}
+    <textarea readonly></textarea>
+    <div class="acts"><button class="primary" data-a="copy">Copy prompt</button>
+    <span class="upload ghost">Upload picture<input type="file" accept="image/*" data-a="up" aria-label="Upload ChatGPT's picture"></span>
+    <button class="ghost" data-a="drop">Cancel</button><span class="note st"></span></div></div>`).join('');
+  $('jobs').querySelectorAll('.job').forEach(el=>{ const j=S.jobs.find(x=>x.id==el.dataset.j);
+    el.querySelector('h3').textContent=j.kind==='doll'?'The doll':'Piece: '+j.title;
+    el.querySelector('.att').textContent=j.attach.join('; ');
+    el.querySelector('textarea').value=j.prompt; });
+}
+$('jobs').addEventListener('click',async e=>{
+  const b=e.target.closest('[data-a]'); if(!b) return; const el=b.closest('.job'); const j=S.jobs.find(x=>x.id==el.dataset.j); if(!j) return;
+  if(b.dataset.a==='copy'){ const ta=el.querySelector('textarea');
+    try{ await navigator.clipboard.writeText(j.prompt); el.querySelector('.st').textContent='Copied. Now open ChatGPT.'; }
+    catch(err){ ta.focus(); ta.select(); el.querySelector('.st').textContent='Selected. Use Copy from the menu.'; } }
+  if(b.dataset.a==='drop'){ S.jobs=S.jobs.filter(x=>x!==j);
+    if(j.kind==='piece'){ const p=S.pieces.find(q=>q.id===j.pieceId); if(p&&!p.url) S.pieces=S.pieces.filter(q=>q!==p); else if(p){ p.waiting=false; } }
+    save(); renderJobs(); renderTray(); clothesProgress(); }
+});
+$('jobs').addEventListener('change',async e=>{
+  const inp=e.target.closest('input[data-a="up"]'); if(!inp||!inp.files[0]) return; const el=inp.closest('.job'); const j=S.jobs.find(x=>x.id==el.dataset.j);
+  const st=el.querySelector('.st'); st.textContent='Cutting it out…';
+  try{
+    if(j.kind==='piece'&&!S.doll) throw new Error('Make the doll first.');
+    const url=await shrink(inp.files[0],1600);
+    await applyResult(j,url);
+    S.jobs=S.jobs.filter(x=>x!==j); save(); renderJobs();
+  }catch(err){ st.textContent=err.message||'That picture could not be used. Try another.'; }
+});
 
 /* ---------- dress up ---------- */
 const CONFLICT={dress:['top','skirt','pants'],top:['dress'],skirt:['dress','pants'],pants:['dress','skirt'],boots:['shoes'],shoes:['boots']};
@@ -460,9 +572,9 @@ function renderTray(){
   const t=$('tray');
   if(!S.pieces.length){ t.innerHTML='<p class="note">No clothes yet. Pick a style and pieces, then tap Paint the clothes.</p>'; return; }
   t.innerHTML=S.pieces.map(p=>`<div class="card${p.wearing?' on':''}" data-id="${p.id}">
-    <button class="wear" ${p.url?'':'disabled'}>${p.url?`<img alt="" src="${p.url}">`:`<span class="ph">${p.busy?'Painting…':'Failed'}</span>`}
+    <button class="wear" ${p.url?'':'disabled'}>${p.url?`<img alt="" src="${p.url}">`:`<span class="ph">${p.busy?'Painting…':p.waiting?'Waiting for your ChatGPT picture':'Failed'}</span>`}
     <span class="nm"></span><span class="st">${p.busy?'':p.error?'':p.wearing?'Wearing':'Tap to wear'}</span></button>
-    <div class="bar">${p.url&&p.wearing?'<button data-a="adjust">Adjust</button>':''}${p.busy?'':`<button data-a="redo">${p.error?'Retry':'Repaint'}</button><button data-a="del" aria-label="Remove">✕</button>`}</div></div>`).join('');
+    <div class="bar">${p.url&&p.wearing?'<button data-a="adjust">Adjust</button>':''}${p.busy||p.waiting?'':`<button data-a="redo">${p.error?'Retry':'Redo'}</button><button data-a="del" aria-label="Remove">✕</button>`}</div></div>`).join('');
   t.querySelectorAll('.card').forEach(el=>{ const p=S.pieces.find(q=>q.id==el.dataset.id); el.querySelector('.nm').textContent=p.error?p.error.slice(0,90):p.desc; el.querySelector('.nm').title=p.desc; });
 }
 $('tray').addEventListener('click',async e=>{
@@ -471,8 +583,8 @@ $('tray').addEventListener('click',async e=>{
   if(!a&&e.target.closest('.wear')&&p.url){ wear(p,!p.wearing); if(p.wearing) S.sel=null; renderStage(); renderTray(); save(); return; }
   if(!a) return;
   if(a.dataset.a==='adjust'){ S.sel=p.id; renderStage(); $('stage').scrollIntoView({behavior:'smooth',block:'center'}); }
-  if(a.dataset.a==='del'){ S.pieces=S.pieces.filter(q=>q!==p); renderStage(); renderTray(); save(); renderSheetsIfOpen(); }
-  if(a.dataset.a==='redo'){ await paintPiece(p); if(!p.error) wear(p,true); renderStage(); renderTray(); save(); renderSheetsIfOpen(); }
+  if(a.dataset.a==='del'){ S.pieces=S.pieces.filter(q=>q!==p); S.jobs=S.jobs.filter(j=>j.pieceId!==p.id); renderJobs(); renderStage(); renderTray(); save(); renderSheetsIfOpen(); }
+  if(a.dataset.a==='redo'){ if(isManual()){ startPiece(p); renderTray(); save(); } else { await startPieceAwait(p); renderTray(); } }
 });
 $('undress').onclick=()=>{ S.pieces.forEach(p=>p.wearing=false); S.sel=null; renderStage(); renderTray(); save(); };
 $('outfit').onclick=()=>{ S.pieces.forEach(p=>p.wearing=false); const seen=new Set();
@@ -557,11 +669,13 @@ $('tab-dress').onclick=()=>setView('dress'); $('tab-sheets').onclick=()=>setView
 /* ---------- boot ---------- */
 (async()=>{
   await DB.open(); const st=await DB.get('state');
-  if(st){ Object.assign(S,{photo:st.photo,doll:st.doll,aes:st.aes||'cottage',custom:st.custom||'',plan:st.plan||{},pieces:(st.pieces||[]).map(p=>({...p,busy:false,error:p.url?'':(p.error||'Not painted')}))});
+  if(st){ Object.assign(S,{batch:st.batch,jobs:st.jobs||[],photo:st.photo,doll:st.doll,aes:st.aes||'cottage',custom:st.custom||'',plan:st.plan||{},pieces:(st.pieces||[]).map(p=>({...p,busy:false,error:p.url||p.waiting?'':(p.error||'Not painted')}))});
+    JID=Math.max(0,...S.jobs.map(j=>j.id||0));
     if(st.picks) S.picks=new Set(st.picks); PID=Math.max(0,...S.pieces.map(p=>p.id));
     if(S.photo){ $('photo-thumb').src=S.photo; $('photo-thumb').hidden=false; }
     $('custom-style').value=S.custom; if(S.doll) $('make-doll').textContent='Paint the doll again'; }
-  if(!S.key) status('doll-status','Start by choosing a service and pasting your API key in step 1.');
+  setProvider(store.get('sd-provider')||'manual'); renderJobs();
+  if(!S.photo) status('doll-status','Add a photo, then tap Paint the doll.');
   renderChips(); renderPlan(); renderStage(); renderTray();
 })();
 window.__SD={S,cutout,renderStage,renderTray,setView,buildSheets,gemini:(f)=>{}};
