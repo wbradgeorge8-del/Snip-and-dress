@@ -93,6 +93,15 @@ details summary{cursor:pointer;font-weight:600}
 .page{margin:0;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px;display:flex;flex-direction:column;gap:8px}
 .page canvas{width:100%;height:auto;background:#fff;border-radius:4px;box-shadow:0 2px 8px rgba(0,0,0,.12)}
 .page figcaption{display:flex;justify-content:space-between;align-items:center;font-size:13px;color:var(--muted)}
+.stickers{display:flex;flex-direction:column;gap:14px;min-width:0}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:10px}
+.inline{display:flex;flex-wrap:wrap;gap:10px;align-items:end}
+.inline label.f{flex:1;min-width:140px}
+.splan{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,300px),1fr));gap:8px}
+.splan .row{border:1px solid var(--line);border-radius:10px;padding:8px;background:var(--bg);display:flex;flex-direction:column;gap:6px}
+.splan b{font-size:12px}
+.scards{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px}
+.spages .page canvas{background-color:#fff;background-image:linear-gradient(45deg,#eee 25%,transparent 25%,transparent 75%,#eee 75%),linear-gradient(45deg,#eee 25%,transparent 25%,transparent 75%,#eee 75%);background-size:20px 20px;background-position:0 0,10px 10px}
 @media (max-width:1150px){.dress{grid-template-columns:1fr}}
 @media (max-width:840px){.app{grid-template-columns:1fr}}
 </style>
@@ -106,6 +115,7 @@ details summary{cursor:pointer;font-weight:600}
   <nav class="tabs" role="tablist">
     <button id="tab-dress" role="tab" aria-selected="true">Dress up</button>
     <button id="tab-sheets" role="tab" aria-selected="false">Cut-out sheets</button>
+    <button id="tab-stickers" role="tab" aria-selected="false">Sticker sheet</button>
   </nav>
 </header>
 
@@ -151,6 +161,7 @@ details summary{cursor:pointer;font-weight:600}
         <div class="refs" id="refs"></div>
       </details>
       <button class="primary" id="make-doll">Paint the doll</button>
+      <button class="ghost" id="make-hair" hidden>Make the hair piece (lies over the clothes)</button>
       <p class="status" id="doll-status"></p>
     </section>
 
@@ -162,6 +173,9 @@ details summary{cursor:pointer;font-weight:600}
 
     <section>
       <h2><span class="step">4</span> Pieces</h2>
+      <label class="f">Clothes are made as
+        <select id="piece-kind"><option value="tabs">Paper doll pieces with fold tabs</option><option value="sticker">Stickers (no tabs)</option></select>
+      </label>
       <div class="chips" id="cats"></div>
       <p class="note">Edit any description before painting.</p>
       <div class="plan" id="plan"></div>
@@ -186,6 +200,7 @@ details summary{cursor:pointer;font-weight:600}
         <span>Adjust <b id="fit-name"></b>: drag to move, pinch or slide to resize</span>
         <label>Size <input type="range" id="fit-scale" min="0.2" max="2" step="0.005"></label>
         <button class="ghost" id="fit-reset">Auto-fit</button>
+        <button class="primary" id="fit-done" style="padding:7px 14px;font-size:13px">Done</button>
       </div>
     </div>
     <div class="tray">
@@ -195,10 +210,31 @@ details summary{cursor:pointer;font-weight:600}
     </div>
   </section>
 
+  <section class="stickers" id="view-stickers" hidden>
+    <div class="panel">
+      <h2>Sticker sheet</h2>
+      <p class="note">Makes full-outfit stickers of the person in your photo (step 2), each in a different pose, in the style from step 3. The finished sheets fit Cricut Print Then Cut (6.75 × 9.25 in) with a clear background, so Cricut cuts around each sticker.</p>
+      <div class="inline">
+        <label class="f">How many stickers <select id="s-count"><option>4</option><option selected>6</option><option>8</option><option>9</option><option>12</option></select></label>
+        <label class="f">Sticker height <select id="s-height"><option value="2">2 in</option><option value="2.5">2.5 in</option><option value="3" selected>3 in</option><option value="3.5">3.5 in</option><option value="4">4 in</option></select></label>
+        <button class="ghost" id="s-replan">New outfit and pose ideas</button>
+      </div>
+      <div class="splan" id="splan"></div>
+      <button class="primary" id="make-stickers">Make the stickers</button>
+      <p class="status" id="sticker-status"></p>
+    </div>
+    <div class="panel"><h2>Your stickers</h2><div class="scards" id="scards"></div></div>
+    <div class="sheet-bar">
+      <div><strong>Cricut Print Then Cut sheets, 6.75 × 9.25 in at 300 dpi.</strong>
+      <div class="note">In Cricut Design Space, upload the PNG, keep it at 6.75 in wide, then Print Then Cut on sticker paper. The checkerboard is the clear background and won't print.</div></div>
+      <button class="ghost" id="s-dl-all">Download all sheets</button>
+    </div>
+    <div class="pages spages" id="spages"></div>
+  </section>
   <section class="sheets" id="view-sheets" hidden>
     <div class="sheet-bar">
       <div><strong>Print at 100% on cardstock, US Letter 8.5 × 11 in.</strong>
-      <div class="note">Cut along the dotted lines. Fold the tabs back over the doll. Fold the base back so she stands.</div></div>
+      <div class="note">Cut along the dotted lines. Fold the tabs back over the doll (sticker-style clothes have no tabs). Fold the base back so she stands.</div></div>
       <button class="ghost" id="dl-all">Download all pages</button>
     </div>
     <div class="pages" id="pages"></div>
@@ -253,10 +289,17 @@ const AES = {
     shoes:'white leather sneakers', sweater:'oversized cream knit sweater', bag:'black leather crossbody bag',
     hat:'black baseball cap', dress:'black ribbed knit t-shirt dress', jewelry:'small gold hoop earrings and a thin chain', belt:'black leather belt'}}
 };
-const DEFAULT_PICKS = {cottage:['top','vest','skirt','shoes','hair'],academia:['top','sweater','skirt','tights','shoes','bag','hair'],goth:['dress','jacket','boots','jewelry','hair'],casual:['top','skirt','boots','jacket','hair']};
+const DEFAULT_PICKS = {cottage:['top','vest','skirt','shoes'],academia:['top','sweater','skirt','tights','shoes','bag'],goth:['dress','jacket','boots','jewelry'],casual:['top','skirt','boots','jacket']};
+const PICKABLE = () => Object.keys(CATS).filter(k=>k!=='hair');
+// complete outfits for stickers, built from each style's pieces
+const COMBOS = {cottage:[['dress','boots','hat'],['top','vest','skirt','shoes'],['sweater','skirt','bag','shoes'],['top','skirt','scarf','boots'],['dress','sweater','shoes','jewelry'],['top','vest','skirt','hat','bag']],
+  academia:[['top','sweater','skirt','tights','shoes'],['top','jacket','pants','shoes','bag'],['dress','top','tights','boots'],['top','skirt','scarf','boots','hat'],['sweater','pants','shoes','jewelry'],['top','jacket','skirt','tights','shoes','bag']],
+  goth:[['dress','jacket','boots','jewelry'],['top','skirt','tights','shoes'],['top','pants','boots','hat'],['dress','sweater','shoes','bag'],['top','skirt','belt','boots','scarf'],['dress','jacket','tights','shoes','hat']],
+  casual:[['top','skirt','boots','jacket'],['top','pants','shoes','bag'],['sweater','skirt','boots'],['dress','jacket','shoes','hat'],['top','pants','jacket','shoes','jewelry'],['sweater','pants','shoes','bag','belt']]};
+const POSES = ['standing facing the viewer with one hand on their hip, smiling','walking mid-stride toward the viewer, arms swinging naturally','sitting cross-legged on the ground, hands resting on their knees','waving hello with one hand, the other relaxed at their side','holding a coffee cup in both hands, looking happy','reading an open book held in their hands, standing','looking back over their shoulder at the viewer, three-quarter view','twirling, with their clothes and hair swinging out in motion','sitting with their knees drawn up and their arms wrapped around them','holding a small bouquet of wildflowers in front of her','standing relaxed with their hands in their pockets, leaning slightly','kneeling on one knee, smiling, hands in their lap'];
 
 /* ---------- state ---------- */
-const S = { provider:'manual', key:'', model:'', base:'', jobs:[], photo:null, doll:null, aes:'cottage', custom:'', picks:new Set(DEFAULT_PICKS.cottage), plan:{}, pieces:[], view:'dress', sel:null };
+const S = { stickers:[], splan:[], tabs:true, provider:'manual', key:'', model:'', base:'', jobs:[], photo:null, doll:null, aes:'cottage', custom:'', picks:new Set(DEFAULT_PICKS.cottage), plan:{}, pieces:[], view:'dress', sel:null };
 let PID = 0;
 
 /* ---------- image helpers ---------- */
@@ -374,6 +417,17 @@ FRAMING: the figure is centered and fills about 92% of the image height.
 ${BG}
 The OTHER images are style references only: copy their painting style and white sticker border, but not the person, face, hair or outfits in them.`;
 }
+function stickerPrompt(pose,outfit){
+  return `Please create a family-friendly illustrated sticker of a character inspired by the person in the FIRST image, like a high-quality printed fashion sticker.
+${STYLE}
+LIKENESS: keep this person's face, skin tone, age, hair color and hairstyle.
+POSE: ${pose}. The whole figure is visible from the top of the hair to the shoes.
+OUTFIT: ${outfit}. Show the outfit clearly and in detail.
+No background scenery and no other people; a small prop is fine only if the pose mentions one.
+FRAMING: the figure is centered and fills about 90% of the image height.
+${BG}
+The OTHER images are style references only: copy their painting style and white sticker border, but not the person, face, hair or outfits in them.`;
+}
 function hairPrompt(){
   return `The image shows a paper doll. Paint a separate paper-doll HAIR piece for her: her own hair, copied exactly as it looks in this image (same color, style, length, volume and shine), so it can be cut out and laid over her clothes.
 Paint ONLY the hair. Leave out her face, neck, ears, body and clothes: where her face and neck are, inside the hairline, show the gray background, so the piece is a hair "frame" with an open face area. Include all of the hair that falls over and in front of her shoulders.
@@ -389,7 +443,8 @@ function piecePrompt(type,desc,label){
 Paint ONLY this item. Do not paint the doll herself (no face, hair, arms or legs) or her base outfit or any other clothing. Where her body would show through (neck opening, sleeves, between the legs), show the gray background.
 FIT (most important): the item must be exactly the size, position and shape it would have if she were wearing it in this exact pose, on the same canvas framing as the doll image, so that when the item is laid directly on top of the doll image it lines up perfectly. Sleeves follow her arms, legs of trousers and boots follow her legs, hats sit where her head is.
 ${STYLE}
-Add small white fold-over paper-doll tabs at the ${tabs}, and a clean white die-cut sticker border around the whole piece including the tabs.
+${['top','sweater','jacket','dress','vest'].includes(type)?`NECK AND SLEEVES: the neckline wraps snugly around the base of her neck, right where her neck meets her shoulders, and fully covers the neckline of her base top. Long sleeves end exactly at her wrists so her painted hands look like they come out of the cuffs (do not paint hands). Short sleeves fully cover the sleeves of her base top.
+`:''}${S.tabs?`Add small white fold-over paper-doll tabs at the ${tabs}, and a clean white die-cut sticker border around the whole piece including the tabs.`:'Do not add any fold tabs. Give the piece a clean white die-cut sticker border all the way around.'}
 ${BG.replace('Give the artwork','Give the piece')}`;
 }
 
@@ -399,7 +454,7 @@ const DB={ db:null,
   put(k,v){ try{ if(this.db) this.db.transaction('kv','readwrite').objectStore('kv').put(v,k); }catch(e){} },
   get(k){ return new Promise(res=>{ try{ if(!this.db) return res(null); const r=this.db.transaction('kv').objectStore('kv').get(k); r.onsuccess=()=>res(r.result||null); r.onerror=()=>res(null); }catch(e){ res(null); } }); }
 };
-const save = () => DB.put('state',{batch:S.batch,jobs:S.jobs,photo:S.photo,doll:S.doll,aes:S.aes,custom:S.custom,picks:[...S.picks],plan:S.plan,pieces:S.pieces.map(p=>({...p,busy:false}))});
+const save = () => DB.put('state',{stickers:S.stickers.map(t=>({...t,busy:false})),splan:S.splan,tabs:S.tabs,batch:S.batch,jobs:S.jobs,photo:S.photo,doll:S.doll,aes:S.aes,custom:S.custom,picks:[...S.picks],plan:S.plan,pieces:S.pieces.map(p=>({...p,busy:false}))});
 
 /* ---------- UI: setup ---------- */
 $('refs').innerHTML=REFS.map(r=>`<img alt="" src="data:image/jpeg;base64,${r}">`).join('');
@@ -428,11 +483,11 @@ $('base-url').oninput=e=>{ S.base=e.target.value.trim(); store.set('sd-base-'+S.
 
 function renderChips(){
   $('aesthetics').innerHTML=Object.entries(AES).map(([k,a])=>`<button class="chip" data-k="${k}" aria-pressed="${S.aes===k&&!S.custom}">${a.label}</button>`).join('');
-  $('cats').innerHTML=Object.entries(CATS).map(([k,l])=>`<button class="chip" data-k="${k}" aria-pressed="${S.picks.has(k)}">${l}</button>`).join('');
+  $('cats').innerHTML=PICKABLE().map(k=>[k,CATS[k]]).map(([k,l])=>`<button class="chip" data-k="${k}" aria-pressed="${S.picks.has(k)}">${l}</button>`).join('');
 }
 function defaultDesc(type){ if(type==='hair') return "the doll's own hair, exactly as it is"; if(S.custom) return `${CATS[type].toLowerCase()} in a ${S.custom} style`; return (AES[S.aes].pieces[type])||`${CATS[type].toLowerCase()} in a ${AES[S.aes].label} style`; }
 function renderPlan(){
-  const types=Object.keys(CATS).filter(k=>S.picks.has(k));
+  const types=PICKABLE().filter(k=>S.picks.has(k));
   $('plan').innerHTML=types.map(t=>`<div class="row"><span></span><label class="f"><b>${CATS[t]}</b><textarea id="plan-${t}" rows="2"></textarea></label></div>`).join('') || '<p class="note">Pick at least one piece.</p>';
   types.forEach(t=>{ const el=$('plan-'+t); el.value=S.plan[t]||defaultDesc(t); el.oninput=()=>{ S.plan[t]=el.value; }; });
 }
@@ -461,6 +516,8 @@ function dollJob(){ return {kind:'doll', title:'The doll', prompt:dollPrompt(), 
   attach:['Your photo (attach it first)','One or two of your sticker photos, as style examples. You can also press and hold a sticker below and save it to Photos.'], refs:true}; }
 function pieceJob(p){ return {kind:'piece', pieceId:p.id, title:p.desc, prompt:piecePrompt(p.type,p.desc,S.custom||AES[S.aes].label), images:[S.doll.raw],
   attach:['The doll picture ChatGPT made for you (or send this in the same ChatGPT chat as the doll)']}; }
+function stickerJob(t){ return {kind:'sticker', stickerId:t.id, title:t.outfit, prompt:stickerPrompt(t.pose,t.outfit), images:[S.photo,...REF_URLS],
+  attach:['Your photo (attach it first)','One or two of your sticker photos, as style examples'], refs:true}; }
 async function runJob(job){
   if(isManual()){ addManualJob(job); return; }
   try{ const raw=await generate(job); await applyResult(job,raw); }
@@ -474,9 +531,15 @@ async function fitTo(raw,w,h){ // match the doll's canvas so pieces line up
   return c.toDataURL('image/png');
 }
 async function applyResult(job,raw){
+  if(job.kind==='sticker'){
+    const t=S.stickers.find(q=>q.id===job.stickerId); if(!t) return;
+    const cut=await cutout(raw); Object.assign(t,{raw,...cut,busy:false,waiting:false,error:''});
+    save(); renderStickers(); stickerProgress(); return;
+  }
   if(job.kind==='doll'){
     const cut=await cutout(raw); const old=S.doll; const dims=await loadImg(raw); S.doll={raw,...cut,rw:dims.naturalWidth,rh:dims.naturalHeight};
-    status('doll-status', old&&S.pieces.length?'New doll ready. Clothes made for the old doll may need redoing if they no longer line up.':'Doll ready. Not quite right? Make another take.');
+    status('doll-status', old&&S.pieces.length?'New doll ready. Clothes made for the old doll may need redoing if they no longer line up.':'Doll ready. Next, tap Make the hair piece, then pick a style and clothes. Not quite right? Make another take.');
+    $('make-hair').hidden=false;
     $('stage').classList.remove('busy'); $('make-doll').disabled=false; $('make-doll').textContent='Paint the doll again';
   } else {
     const p=S.pieces.find(q=>q.id===job.pieceId); if(!p) return;
@@ -488,6 +551,7 @@ async function applyResult(job,raw){
   save(); renderStage(); renderTray(); renderSheetsIfOpen();
 }
 function failJob(job,msg){
+  if(job.kind==='sticker'){ const t=S.stickers.find(q=>q.id===job.stickerId); if(t){ t.busy=false; t.waiting=false; t.error=msg; } renderStickers(); stickerProgress(); return; }
   if(job.kind==='doll'){ status('doll-status',msg,true); $('stage').classList.remove('busy'); $('make-doll').disabled=false; }
   else { const p=S.pieces.find(q=>q.id===job.pieceId); if(p){ p.busy=false; p.waiting=false; p.error=msg; } clothesProgress(); renderTray(); }
 }
@@ -511,7 +575,7 @@ function startPiece(p){
 }
 $('make-clothes').onclick=async()=>{
   if(!S.doll){ status('clothes-status','Make the doll first, so the clothes can match her pose.',true); return; }
-  const types=Object.keys(CATS).filter(k=>S.picks.has(k));
+  const types=PICKABLE().filter(k=>S.picks.has(k));
   if(!types.length){ status('clothes-status','Pick at least one piece.',true); return; }
   S.batch=Date.now();
   const fresh=types.map(t=>({id:++PID,type:t,desc:(S.plan[t]||defaultDesc(t)).trim(),name:CATS[t],wearing:false,batch:S.batch}));
@@ -520,6 +584,14 @@ $('make-clothes').onclick=async()=>{
   fresh.forEach(p=>p.busy=true); renderTray(); clothesProgress();
   const queue=fresh.slice(); const worker=async()=>{ while(queue.length) await startPieceAwait(queue.shift()); };
   await Promise.all([worker(),worker()]); clothesProgress(); save();
+};
+$('make-hair').onclick=async()=>{
+  if(!S.doll) return;
+  S.pieces=S.pieces.filter(q=>!(q.type==='hair'&&!q.url));
+  const p={id:++PID,type:'hair',desc:defaultDesc('hair'),name:'Hair',wearing:false,batch:S.batch};
+  S.pieces.push(p);
+  if(isManual()){ startPiece(p); renderTray(); save(); status('doll-status','Your hair prompt is ready under ChatGPT steps.'); return; }
+  renderTray(); await startPieceAwait(p); renderTray(); save();
 };
 async function startPieceAwait(p){ p.error=''; p.busy=true; await runJob(pieceJob(p)); }
 
@@ -539,7 +611,7 @@ function renderJobs(){
     <span class="upload ghost">Upload picture<input type="file" accept="image/*" data-a="up" aria-label="Upload ChatGPT's picture"></span>
     <button class="ghost" data-a="drop">Cancel</button><span class="note st"></span></div></div>`).join('');
   $('jobs').querySelectorAll('.job').forEach(el=>{ const j=S.jobs.find(x=>x.id==el.dataset.j);
-    el.querySelector('h3').textContent=j.kind==='doll'?'The doll':'Piece: '+j.title;
+    el.querySelector('h3').textContent=j.kind==='doll'?'The doll':j.kind==='sticker'?'Sticker: '+j.title:'Piece: '+j.title;
     el.querySelector('.att').textContent=j.attach.join('; ');
     el.querySelector('textarea').value=j.prompt; });
 }
@@ -549,6 +621,7 @@ $('jobs').addEventListener('click',async e=>{
     try{ await navigator.clipboard.writeText(j.prompt); el.querySelector('.st').textContent='Copied. Now open ChatGPT.'; }
     catch(err){ ta.focus(); ta.select(); el.querySelector('.st').textContent='Selected. Use Copy from the menu.'; } }
   if(b.dataset.a==='drop'){ S.jobs=S.jobs.filter(x=>x!==j);
+    if(j.kind==='sticker'){ const t=S.stickers.find(q=>q.id===j.stickerId); if(t&&!t.url) S.stickers=S.stickers.filter(q=>q!==t); else if(t) t.waiting=false; renderStickers(); }
     if(j.kind==='piece'){ const p=S.pieces.find(q=>q.id===j.pieceId); if(p&&!p.url) S.pieces=S.pieces.filter(q=>q!==p); else if(p){ p.waiting=false; } }
     save(); renderJobs(); renderTray(); clothesProgress(); }
 });
@@ -635,6 +708,7 @@ $('stage').addEventListener('pointermove',e=>{ if(!drag||!touches.has(e.pointerI
 const endTouch=e=>{ touches.delete(e.pointerId); if(drag&&touches.size===0){ drag=null; save(); } else if(drag&&drag.pinch&&touches.size===1){ const [t]=[...touches.values()]; drag={p:drag.p,x:t.x,y:t.y,dx:drag.p.dx,dy:drag.p.dy}; } };
 $('stage').addEventListener('pointerup',endTouch); $('stage').addEventListener('pointercancel',endTouch);
 $('fit-scale').oninput=e=>{ const p=S.pieces.find(q=>q.id===S.sel); if(p){ p.s=+e.target.value; renderStage(); save(); } };
+$('fit-done').onclick=()=>{ S.sel=null; renderStage(); save(); };
 $('fit-reset').onclick=()=>{ const p=S.pieces.find(q=>q.id===S.sel); if(p){ autoFit(p); renderStage(); save(); } };
 
 /* ---------- cut-out sheets ---------- */
@@ -701,21 +775,108 @@ function download(c,name){ c.toBlob(b=>{ const a=document.createElement('a'); a.
 $('pages').addEventListener('click',e=>{ const b=e.target.closest('button[data-i]'); if(b) download(PAGES[+b.dataset.i],`paper-doll-page-${+b.dataset.i+1}.png`); });
 $('dl-all').onclick=()=>PAGES.forEach((c,i)=>setTimeout(()=>download(c,`paper-doll-page-${i+1}.png`),i*600));
 
-function setView(v){ S.view=v; $('view-dress').hidden=v!=='dress'; $('view-sheets').hidden=v!=='sheets'; $('tab-dress').setAttribute('aria-selected',v==='dress'); $('tab-sheets').setAttribute('aria-selected',v==='sheets'); if(v==='sheets') renderSheets(); }
-$('tab-dress').onclick=()=>setView('dress'); $('tab-sheets').onclick=()=>setView('sheets');
+function setView(v){ S.view=v;
+  ['dress','sheets','stickers'].forEach(k=>{ $('view-'+k).hidden=v!==k; $('tab-'+k).setAttribute('aria-selected',v===k); });
+  if(v==='dress') $('view-dress').prepend($('manual')); if(v==='stickers') $('view-stickers').firstElementChild.after($('manual'));
+  if(v==='sheets') renderSheets(); if(v==='stickers'){ if(!S.splan.length) planStickers(); renderSPlan(); renderStickers(); } }
+$('tab-dress').onclick=()=>setView('dress'); $('tab-sheets').onclick=()=>setView('sheets'); $('tab-stickers').onclick=()=>setView('stickers');
+$('piece-kind').onchange=e=>{ S.tabs=e.target.value==='tabs'; save(); };
+
+/* ---------- sticker sheets ----------
+   Each sticker is one complete outfit in its own pose. Sheets are laid out for Cricut Print Then Cut (6.75 x 9.25 in max)
+   with a clear background, so Cricut finds each sticker's outline. */
+const SW=2025, SH=2775, SM=40, SG=50; // 6.75 x 9.25 in at 300 dpi
+let SPAGES=[], SID=0;
+function outfitIdeas(n){
+  const label=S.custom||AES[S.aes].label, out=[];
+  for(let i=0;i<n;i++){
+    if(S.custom){ out.push(`a complete ${S.custom} outfit, look ${i+1}, clearly different from the other looks`); continue; }
+    const c=COMBOS[S.aes][i%COMBOS[S.aes].length], P=AES[S.aes].pieces;
+    out.push(c.filter(t=>P[t]).map(t=>P[t]).join(', ')+` (${label} style)`);
+  }
+  return out;
+}
+function planStickers(){
+  const n=+$('s-count').value, ideas=outfitIdeas(n), start=Math.floor(Math.random()*POSES.length);
+  S.splan=ideas.map((o,i)=>({outfit:o,pose:POSES[(start+i)%POSES.length]}));
+}
+function renderSPlan(){
+  $('splan').innerHTML=S.splan.map((t,i)=>`<div class="row"><b>Sticker ${i+1}</b><label class="f">Outfit<textarea data-i="${i}" data-f="outfit" rows="3"></textarea></label><label class="f">Pose<textarea data-i="${i}" data-f="pose" rows="2"></textarea></label></div>`).join('');
+  $('splan').querySelectorAll('textarea').forEach(el=>{ el.value=S.splan[el.dataset.i][el.dataset.f]; el.oninput=()=>{ S.splan[el.dataset.i][el.dataset.f]=el.value; save(); }; });
+}
+$('s-count').onchange=()=>{ planStickers(); renderSPlan(); save(); };
+$('s-replan').onclick=()=>{ planStickers(); renderSPlan(); save(); };
+$('s-height').onchange=()=>renderStickerSheets();
+function stickerProgress(){
+  const busy=S.stickers.filter(t=>t.busy).length, wait=S.stickers.filter(t=>t.waiting).length, done=S.stickers.filter(t=>t.url).length;
+  if(busy) status('sticker-status',`Painting stickers… ${done} done.`);
+  else if(wait) status('sticker-status',`${wait} sticker${wait>1?'s are':' is'} waiting for a ChatGPT picture. See ChatGPT steps above.`);
+  else if(done) status('sticker-status',`${done} sticker${done>1?'s':''} ready. Your sheets are below.`);
+}
+function startSticker(t){ t.error=''; t.busy=!isManual(); t.waiting=isManual(); S.jobs=S.jobs.filter(j=>j.stickerId!==t.id); return runJob(stickerJob(t)); }
+$('make-stickers').onclick=async()=>{
+  if(!S.photo){ status('sticker-status','Add a photo in step 2 first.',true); return; }
+  const fresh=S.splan.filter(t=>t.outfit.trim()).map(t=>({id:++SID,outfit:t.outfit.trim(),pose:t.pose.trim()||POSES[0]}));
+  S.stickers=S.stickers.concat(fresh);
+  if(isManual()){ fresh.forEach(startSticker); renderStickers(); stickerProgress(); save(); return; }
+  fresh.forEach(t=>t.busy=true); renderStickers(); stickerProgress();
+  const q=fresh.slice(); const worker=async()=>{ while(q.length){ const t=q.shift(); await startSticker(t); } };
+  await Promise.all([worker(),worker()]); save();
+};
+function renderStickers(){
+  const box=$('scards');
+  box.innerHTML=S.stickers.length?S.stickers.map(t=>`<div class="card" data-id="${t.id}"><div class="wear">${t.url?`<img alt="" src="${t.url}">`:`<span class="ph">${t.busy?'Painting…':t.waiting?'Waiting for your ChatGPT picture':'Failed'}</span>`}<span class="nm"></span></div>
+    <div class="bar">${t.busy||t.waiting?'':`<button data-a="redo">${t.error?'Retry':'Redo'}</button><button data-a="del" aria-label="Remove">✕</button>`}</div></div>`).join(''):'<p class="note">No stickers yet. Check the outfits and poses above, then tap Make the stickers.</p>';
+  box.querySelectorAll('.card').forEach(el=>{ const t=S.stickers.find(q=>q.id==el.dataset.id); el.querySelector('.nm').textContent=t.error?t.error.slice(0,90):t.pose; });
+  renderStickerSheets();
+}
+$('scards').addEventListener('click',async e=>{
+  const a=e.target.closest('[data-a]'); if(!a) return; const t=S.stickers.find(q=>q.id==a.closest('.card').dataset.id); if(!t) return;
+  if(a.dataset.a==='del'){ S.stickers=S.stickers.filter(q=>q!==t); S.jobs=S.jobs.filter(j=>j.stickerId!==t.id); renderJobs(); }
+  if(a.dataset.a==='redo'){ const pr=startSticker(t); renderStickers(); stickerProgress(); await pr; }
+  renderStickers(); save();
+});
+async function buildStickerSheets(){
+  const done=S.stickers.filter(t=>t.url); if(!done.length) return [];
+  const hpx=+$('s-height').value*300, items=[];
+  for(const t of done){ let c=await pieceCanvas(t.url,t.bbox,hpx/t.bbox.h,10);
+    if(c.width>SW-SM*2){ const k=(SW-SM*2)/c.width, d=canvas(Math.floor(c.width*k),Math.floor(c.height*k)); d.getContext('2d').drawImage(c,0,0,d.width,d.height); c=d; }
+    items.push(c); }
+  const pages=[]; let page, x, y, rowH;
+  const newPage=()=>{ page=canvas(SW,SH); pages.push(page); x=SM; y=SM; rowH=0; }; newPage();
+  for(const c of items){
+    if(x+c.width>SW-SM&&x>SM){ x=SM; y+=rowH+SG; rowH=0; }
+    if(y+c.height>SH-SM&&y>SM) newPage();
+    page.getContext('2d').drawImage(c,x,y); x+=c.width+SG; rowH=Math.max(rowH,c.height);
+  }
+  return pages;
+}
+async function renderStickerSheets(){
+  const box=$('spages'); if(S.view!=='stickers') return;
+  SPAGES=await buildStickerSheets();
+  box.innerHTML=SPAGES.length?'':'<p class="note">Finished stickers are laid out on Cricut sheets here.</p>';
+  SPAGES.forEach((c,i)=>{ const f=document.createElement('figure'); f.className='page'; f.appendChild(c);
+    const cap=document.createElement('figcaption'); cap.innerHTML=`<span>Sheet ${i+1} of ${SPAGES.length}</span><button class="ghost" data-i="${i}">Download PNG</button>`; f.appendChild(cap); box.appendChild(f); });
+}
+$('spages').addEventListener('click',e=>{ const b=e.target.closest('button[data-i]'); if(b) download(SPAGES[+b.dataset.i],`sticker-sheet-${+b.dataset.i+1}.png`); });
+$('s-dl-all').onclick=()=>SPAGES.forEach((c,i)=>setTimeout(()=>download(c,`sticker-sheet-${i+1}.png`),i*600));
 
 /* ---------- boot ---------- */
 (async()=>{
   await DB.open(); const st=await DB.get('state');
   if(st){ Object.assign(S,{batch:st.batch,jobs:st.jobs||[],photo:st.photo,doll:st.doll,aes:st.aes||'cottage',custom:st.custom||'',plan:st.plan||{},pieces:(st.pieces||[]).map(p=>({...p,busy:false,error:p.url||p.waiting?'':(p.error||'Not painted')}))});
     JID=Math.max(0,...S.jobs.map(j=>j.id||0));
-    if(st.picks) S.picks=new Set(st.picks); PID=Math.max(0,...S.pieces.map(p=>p.id));
+    if(st.picks) S.picks=new Set(st.picks.filter(k=>k!=='hair'));
+    S.stickers=(st.stickers||[]).map(t=>({...t,busy:false,error:t.url||t.waiting?'':(t.error||'Not painted')})); S.splan=st.splan||[]; S.tabs=st.tabs!==false; $('piece-kind').value=S.tabs?'tabs':'sticker';
+    SID=Math.max(0,...S.stickers.map(t=>t.id));
+    $('make-hair').hidden=!S.doll; PID=Math.max(0,...S.pieces.map(p=>p.id));
     S.pieces.forEach(p=>{ if(p.url&&!p.fit) autoFit(p); });
     if(S.photo){ $('photo-thumb').src=S.photo; $('photo-thumb').hidden=false; }
     $('custom-style').value=S.custom; if(S.doll) $('make-doll').textContent='Paint the doll again'; }
   setProvider(store.get('sd-provider')||'manual'); renderJobs();
   if(!S.photo) status('doll-status','Add a photo, then tap Paint the doll.');
   renderChips(); renderPlan(); renderStage(); renderTray();
+  stickerProgress();
 })();
 window.__SD={S,cutout,renderStage,renderTray,setView,buildSheets,gemini:(f)=>{}};
 </script>
