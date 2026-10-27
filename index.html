@@ -138,11 +138,11 @@ details summary{cursor:pointer;font-weight:600}
         <img id="photo-thumb" alt="" hidden>
         <span><b>Choose or drop a photo</b><small>Full body is best. A clear face shot also works.</small></span>
       </label>
-      <label class="f">Under the clothes
+      <label class="f">Base outfit (what the doll wears under the clothes)
         <select id="underwear">
-          <option value="a plain nude-toned fitted camisole and matching plain shorts">Camisole &amp; shorts</option>
-          <option value="a plain nude-toned bra and plain briefs">Bra &amp; briefs</option>
-          <option value="a plain white fitted tank top and plain grey boxer briefs">Tank &amp; boxer briefs</option>
+          <option value="a plain, modest, fitted light-beige crew-neck short-sleeve t-shirt and matching plain knee-length bike shorts">Fitted tee &amp; bike shorts</option>
+          <option value="a plain, modest, fitted white tank top and plain light-grey knee-length shorts">Tank top &amp; shorts</option>
+          <option value="a plain, modest, fitted black short-sleeve crew-neck top and plain black ankle-length leggings">Black top &amp; leggings</option>
         </select>
       </label>
       <details>
@@ -365,11 +365,11 @@ const REF_URLS = REFS.map(r=>'data:image/jpeg;base64,'+r);
 const STYLE = `ART STYLE: a realistic, softly painted digital illustration like a high-quality printed fashion sticker: lifelike face, real human proportions, natural skin shading, detailed fabric texture and soft studio lighting. It must NOT look cartoonish, anime, chibi, flat or vector.`;
 const BG = `Place it on a solid, perfectly flat medium gray background (#BEBEBE) with no gradient, no floor, no shadow, no text and no other objects. Give the artwork a clean white die-cut sticker border about 8 pixels wide all the way around, like the style references.`;
 function dollPrompt(){
-  return `Create a full-body PAPER DOLL of the person in the FIRST image.
+  return `Please create a family-friendly, full-length illustrated paper doll character inspired by the person in the FIRST image, like the classic dress-up paper dolls sold in craft stores.
 ${STYLE}
-LIKENESS: keep this person's face, skin tone, age, hair color, hairstyle and body type.
-POSE (important, every clothing piece will be painted to this pose): standing straight and facing the viewer, the whole body visible from the top of the hair to the soles of the feet, arms relaxed and held a little away from the body so there is a gap between each arm and the torso, hands open and not touching the body, legs slightly apart with a gap between them, bare feet flat and pointing forward. Long hair should fall behind the shoulders, not over the chest.
-CLOTHING: only ${$('underwear').value}. Nothing else: no jewelry, no shoes.
+LIKENESS: keep this person's face, skin tone, age, hair color and hairstyle.
+POSE (every outfit piece will later be drawn to fit this pose): standing straight and facing the viewer in a neutral, relaxed catalog pose, the whole figure visible from the top of the hair to the shoes, arms relaxed and held a little away from the sides so there is a small gap between each arm and the torso, hands open, legs slightly apart, feet pointing forward. Long hair falls behind the shoulders.
+OUTFIT: the doll wears ${$('underwear').value}, with simple plain flat neutral slip-on shoes. This is the doll's simple base outfit; other clothes will be layered over it later. No jewelry or accessories.
 FRAMING: the figure is centered and fills about 92% of the image height.
 ${BG}
 The OTHER images are style references only: copy their painting style and white sticker border, but not the person, face, hair or outfits in them.`;
@@ -377,7 +377,7 @@ The OTHER images are style references only: copy their painting style and white 
 function piecePrompt(type,desc,label){
   const tabs = {shoes:'outer sides of each shoe',boots:'outer sides of each boot',hat:'two lower sides of the hat',bag:'top of the strap',jewelry:'ends of the chain',belt:'two ends',tights:'waistband sides'}[type]||'shoulders and at both sides of the waist';
   return `The image shows a paper doll. Paint ONE paper-doll clothing piece for her: ${desc}${label?` (${label} style)`:''}.
-Paint ONLY this item. Do not paint her body, skin, face, hair, underwear or any other clothing. Where her body would show through (neck opening, sleeves, between the legs), show the gray background.
+Paint ONLY this item. Do not paint the doll herself (no face, hair, arms or legs) or her base outfit or any other clothing. Where her body would show through (neck opening, sleeves, between the legs), show the gray background.
 FIT (most important): the item must be exactly the size, position and shape it would have if she were wearing it in this exact pose, on the same canvas framing as the doll image, so that when the item is laid directly on top of the doll image it lines up perfectly. Sleeves follow her arms, legs of trousers and boots follow her legs, hats sit where her head is.
 ${STYLE}
 Add small white fold-over paper-doll tabs at the ${tabs}, and a clean white die-cut sticker border around the whole piece including the tabs.
