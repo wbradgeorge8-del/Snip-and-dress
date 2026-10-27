@@ -183,9 +183,9 @@ details summary{cursor:pointer;font-weight:600}
       </div>
       <div class="stage" id="stage"><div class="ph" id="stage-ph">Your painted doll appears here after step 2.</div></div>
       <div class="fit" id="fit" hidden>
-        <span>Adjust <b id="fit-name"></b>: drag on the doll to move</span>
-        <label>Size <input type="range" id="fit-scale" min="0.7" max="1.3" step="0.005"></label>
-        <button class="ghost" id="fit-reset">Reset</button>
+        <span>Adjust <b id="fit-name"></b>: drag to move, pinch or slide to resize</span>
+        <label>Size <input type="range" id="fit-scale" min="0.2" max="2" step="0.005"></label>
+        <button class="ghost" id="fit-reset">Auto-fit</button>
       </div>
     </div>
     <div class="tray">
@@ -214,9 +214,9 @@ const store = { get(k){ try{return localStorage.getItem(k);}catch(e){return null
 /* ---------- styles & pieces ---------- */
 const CATS = {
   top:'Top', sweater:'Sweater / cardigan', vest:'Vest', dress:'Dress', skirt:'Skirt', pants:'Pants', jacket:'Jacket / coat',
-  tights:'Tights / socks', shoes:'Shoes', boots:'Boots', bag:'Bag', hat:'Hat', jewelry:'Jewelry', belt:'Belt', scarf:'Scarf'
+  tights:'Tights / socks', shoes:'Shoes', boots:'Boots', bag:'Bag', hat:'Hat', jewelry:'Jewelry', belt:'Belt', scarf:'Scarf', hair:'Hair (goes over clothes)'
 };
-const Z = {tights:5,shoes:12,boots:13,pants:20,skirt:22,top:30,dress:34,sweater:40,vest:45,belt:48,jacket:50,scarf:60,jewelry:62,bag:70,hat:80};
+const Z = {tights:5,shoes:12,boots:13,pants:20,skirt:22,top:30,dress:34,sweater:40,vest:45,belt:48,jacket:50,scarf:60,jewelry:62,hair:66,bag:70,hat:80};
 const AES = {
   cottage:{label:'Cottage boho', pieces:{
     top:'chocolate-brown fitted long-sleeve fine-knit top with a scoop neck',
@@ -253,7 +253,7 @@ const AES = {
     shoes:'white leather sneakers', sweater:'oversized cream knit sweater', bag:'black leather crossbody bag',
     hat:'black baseball cap', dress:'black ribbed knit t-shirt dress', jewelry:'small gold hoop earrings and a thin chain', belt:'black leather belt'}}
 };
-const DEFAULT_PICKS = {cottage:['top','vest','skirt','shoes'],academia:['top','sweater','skirt','tights','shoes','bag'],goth:['dress','jacket','boots','jewelry'],casual:['top','skirt','boots','jacket']};
+const DEFAULT_PICKS = {cottage:['top','vest','skirt','shoes','hair'],academia:['top','sweater','skirt','tights','shoes','bag','hair'],goth:['dress','jacket','boots','jewelry','hair'],casual:['top','skirt','boots','jacket','hair']};
 
 /* ---------- state ---------- */
 const S = { provider:'manual', key:'', model:'', base:'', jobs:[], photo:null, doll:null, aes:'cottage', custom:'', picks:new Set(DEFAULT_PICKS.cottage), plan:{}, pieces:[], view:'dress', sel:null };
@@ -374,7 +374,16 @@ FRAMING: the figure is centered and fills about 92% of the image height.
 ${BG}
 The OTHER images are style references only: copy their painting style and white sticker border, but not the person, face, hair or outfits in them.`;
 }
+function hairPrompt(){
+  return `The image shows a paper doll. Paint a separate paper-doll HAIR piece for her: her own hair, copied exactly as it looks in this image (same color, style, length, volume and shine), so it can be cut out and laid over her clothes.
+Paint ONLY the hair. Leave out her face, neck, ears, body and clothes: where her face and neck are, inside the hairline, show the gray background, so the piece is a hair "frame" with an open face area. Include all of the hair that falls over and in front of her shoulders.
+FIT (most important): the hair must be exactly the same size and in exactly the same position as on the doll, on the same canvas framing as the doll image, so that when this picture is laid directly on top of the doll image the hair lines up perfectly.
+${STYLE}
+No fold tabs. Give the hair a clean white die-cut sticker border around its outer edge (not inside the face opening).
+${BG.replace('Give the artwork','Give the piece').replace(/ Give the piece[^.]*\./,'')}`;
+}
 function piecePrompt(type,desc,label){
+  if(type==='hair') return hairPrompt();
   const tabs = {shoes:'outer sides of each shoe',boots:'outer sides of each boot',hat:'two lower sides of the hat',bag:'top of the strap',jewelry:'ends of the chain',belt:'two ends',tights:'waistband sides'}[type]||'shoulders and at both sides of the waist';
   return `The image shows a paper doll. Paint ONE paper-doll clothing piece for her: ${desc}${label?` (${label} style)`:''}.
 Paint ONLY this item. Do not paint the doll herself (no face, hair, arms or legs) or her base outfit or any other clothing. Where her body would show through (neck opening, sleeves, between the legs), show the gray background.
@@ -421,7 +430,7 @@ function renderChips(){
   $('aesthetics').innerHTML=Object.entries(AES).map(([k,a])=>`<button class="chip" data-k="${k}" aria-pressed="${S.aes===k&&!S.custom}">${a.label}</button>`).join('');
   $('cats').innerHTML=Object.entries(CATS).map(([k,l])=>`<button class="chip" data-k="${k}" aria-pressed="${S.picks.has(k)}">${l}</button>`).join('');
 }
-function defaultDesc(type){ if(S.custom) return `${CATS[type].toLowerCase()} in a ${S.custom} style`; return (AES[S.aes].pieces[type])||`${CATS[type].toLowerCase()} in a ${AES[S.aes].label} style`; }
+function defaultDesc(type){ if(type==='hair') return "the doll's own hair, exactly as it is"; if(S.custom) return `${CATS[type].toLowerCase()} in a ${S.custom} style`; return (AES[S.aes].pieces[type])||`${CATS[type].toLowerCase()} in a ${AES[S.aes].label} style`; }
 function renderPlan(){
   const types=Object.keys(CATS).filter(k=>S.picks.has(k));
   $('plan').innerHTML=types.map(t=>`<div class="row"><span></span><label class="f"><b>${CATS[t]}</b><textarea id="plan-${t}" rows="2"></textarea></label></div>`).join('') || '<p class="note">Pick at least one piece.</p>';
@@ -472,7 +481,7 @@ async function applyResult(job,raw){
   } else {
     const p=S.pieces.find(q=>q.id===job.pieceId); if(!p) return;
     const fitted=S.doll?await fitTo(raw,S.doll.rw||S.doll.w,S.doll.rh||S.doll.h):raw;
-    const cut=await cutout(fitted); Object.assign(p,{raw:fitted,...cut,dx:0,dy:0,s:1,busy:false,waiting:false,error:''});
+    const cut=await cutout(fitted); Object.assign(p,{raw:fitted,...cut,busy:false,waiting:false,error:''}); autoFit(p);
     if(!S.pieces.some(q=>q!==p&&q.wearing&&q.type===p.type)) wear(p,true);
     clothesProgress();
   }
@@ -592,12 +601,41 @@ $('outfit').onclick=()=>{ S.pieces.forEach(p=>p.wearing=false); const seen=new S
   S.pieces.filter(p=>p.url).sort((a,b)=>order.includes(b.type)-order.includes(a.type)).forEach(p=>{ if(seen.has(p.type)) return; if(S.pieces.some(q=>q.wearing&&(CONFLICT[p.type]||[]).includes(q.type))) return; wear(p,true); seen.add(p.type); });
   renderStage(); renderTray(); save(); };
 // drag to adjust the selected piece
-let drag=null;
-$('stage').addEventListener('pointerdown',e=>{ const p=S.pieces.find(q=>q.id===S.sel&&q.wearing); if(!p) return; drag={p,x:e.clientX,y:e.clientY,dx:p.dx,dy:p.dy}; $('stage').setPointerCapture(e.pointerId); });
-$('stage').addEventListener('pointermove',e=>{ if(!drag) return; const r=$('stage').getBoundingClientRect(); drag.p.dx=drag.dx+(e.clientX-drag.x)/r.width*100; drag.p.dy=drag.dy+(e.clientY-drag.y)/r.height*100; renderStage(); });
-$('stage').addEventListener('pointerup',()=>{ if(drag){ drag=null; save(); } });
+/* Image models often draw a piece filling the whole frame instead of at the doll's size.
+   autoFit() shrinks each piece into the area of the doll where that item is worn, based on the doll's outline.
+   Areas are fractions of the doll's height (H) measured from the top of her hair, centered on her middle. */
+const FIT_ZONES = {
+  hat:{y0:-0.03,y1:0.11,w:0.16}, jewelry:{y0:0.13,y1:0.30,w:0.16}, scarf:{y0:0.12,y1:0.40,w:0.24},
+  top:{y0:0.14,y1:0.47,w:0.42}, sweater:{y0:0.14,y1:0.50,w:0.44}, jacket:{y0:0.14,y1:0.62,w:0.45}, vest:{y0:0.15,y1:0.48,w:0.26},
+  dress:{y0:0.14,y1:0.82,w:0.40}, skirt:{y0:0.37,y1:0.86,w:0.34}, pants:{y0:0.37,y1:0.97,w:0.24}, tights:{y0:0.37,y1:0.99,w:0.20},
+  belt:{y0:0.37,y1:0.43,w:0.17}, bag:{y0:0.15,y1:0.58,w:0.30}, hair:{y0:0,y1:0.6,w:0.3},
+  boots:{y0:0.62,y1:1.0,w:0.20,bottom:true}, shoes:{y0:0.91,y1:1.0,w:0.20,bottom:true}
+};
+function autoFit(p){
+  if(!S.doll||!p.bbox) return;
+  const z=FIT_ZONES[p.type]||{y0:0.15,y1:0.6,w:0.4}, D=S.doll.bbox, H=D.h, cw=S.doll.w, ch=S.doll.h;
+  const cx=D.x+D.w/2, bw=z.w*H, bh=(z.y1-z.y0)*H, top=D.y+z.y0*H;
+  const b=p.bbox; let sc=Math.min(bw/b.w, bh/b.h, 4);
+  // hair is a copy of the doll's own hair: keep its size unless it came back blown up, and pin it to the top of her head
+  if(p.type==='hair') sc = b.w<=0.4*H&&b.h<=0.75*H ? 1 : Math.min(0.26*H/b.w, 0.55*H/b.h);
+  const pcx=b.x+b.w/2, pcy=b.y+b.h/2;
+  const tcy = z.bottom ? top+bh-b.h*sc/2 : top+b.h*sc/2;
+  const dx=cx-cw/2-sc*(pcx-cw/2), dy=tcy-ch/2-sc*(pcy-ch/2);
+  p.fit={dx:dx/cw*100, dy:dy/ch*100, s:sc}; Object.assign(p,p.fit);
+}
+let drag=null; const touches=new Map();
+$('stage').addEventListener('pointerdown',e=>{ const p=S.pieces.find(q=>q.id===S.sel&&q.wearing); if(!p) return; touches.set(e.pointerId,{x:e.clientX,y:e.clientY}); $('stage').setPointerCapture(e.pointerId);
+  const pts=[...touches.values()];
+  if(pts.length===2){ drag={p,pinch:Math.hypot(pts[0].x-pts[1].x,pts[0].y-pts[1].y),s:p.s}; }
+  else drag={p,x:e.clientX,y:e.clientY,dx:p.dx,dy:p.dy}; });
+$('stage').addEventListener('pointermove',e=>{ if(!drag||!touches.has(e.pointerId)) return; touches.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  if(drag.pinch){ const pts=[...touches.values()]; if(pts.length<2) return; drag.p.s=Math.max(0.1,Math.min(4,drag.s*Math.hypot(pts[0].x-pts[1].x,pts[0].y-pts[1].y)/drag.pinch)); }
+  else { const r=$('stage').getBoundingClientRect(); drag.p.dx=drag.dx+(e.clientX-drag.x)/r.width*100; drag.p.dy=drag.dy+(e.clientY-drag.y)/r.height*100; }
+  renderStage(); });
+const endTouch=e=>{ touches.delete(e.pointerId); if(drag&&touches.size===0){ drag=null; save(); } else if(drag&&drag.pinch&&touches.size===1){ const [t]=[...touches.values()]; drag={p:drag.p,x:t.x,y:t.y,dx:drag.p.dx,dy:drag.p.dy}; } };
+$('stage').addEventListener('pointerup',endTouch); $('stage').addEventListener('pointercancel',endTouch);
 $('fit-scale').oninput=e=>{ const p=S.pieces.find(q=>q.id===S.sel); if(p){ p.s=+e.target.value; renderStage(); save(); } };
-$('fit-reset').onclick=()=>{ const p=S.pieces.find(q=>q.id===S.sel); if(p){ Object.assign(p,{dx:0,dy:0,s:1}); renderStage(); save(); } };
+$('fit-reset').onclick=()=>{ const p=S.pieces.find(q=>q.id===S.sel); if(p){ autoFit(p); renderStage(); save(); } };
 
 /* ---------- cut-out sheets ---------- */
 const PW=2550, PH=3300, MARGIN=150, GAP=60; // US Letter at 300 dpi
@@ -672,6 +710,7 @@ $('tab-dress').onclick=()=>setView('dress'); $('tab-sheets').onclick=()=>setView
   if(st){ Object.assign(S,{batch:st.batch,jobs:st.jobs||[],photo:st.photo,doll:st.doll,aes:st.aes||'cottage',custom:st.custom||'',plan:st.plan||{},pieces:(st.pieces||[]).map(p=>({...p,busy:false,error:p.url||p.waiting?'':(p.error||'Not painted')}))});
     JID=Math.max(0,...S.jobs.map(j=>j.id||0));
     if(st.picks) S.picks=new Set(st.picks); PID=Math.max(0,...S.pieces.map(p=>p.id));
+    S.pieces.forEach(p=>{ if(p.url&&!p.fit) autoFit(p); });
     if(S.photo){ $('photo-thumb').src=S.photo; $('photo-thumb').hidden=false; }
     $('custom-style').value=S.custom; if(S.doll) $('make-doll').textContent='Paint the doll again'; }
   setProvider(store.get('sd-provider')||'manual'); renderJobs();
